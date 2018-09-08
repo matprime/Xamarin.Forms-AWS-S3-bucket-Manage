@@ -13,6 +13,8 @@ using System.IO.Compression;
 using System.IO;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
+using XamarinAWS;
+using XamarinFile;
 
 namespace HelloXamarinFormsWorld
 {
@@ -133,8 +135,7 @@ namespace HelloXamarinFormsWorld
         private string uploadFilePath = "";
         // Specify your bucket region (an example region is shown).
         private static readonly RegionEndpoint bucketRegion = RegionEndpoint.USEast1;
-        private static IAmazonS3 s3Client;
-
+        
         private static IFolder folder = FileSystem.Current.LocalStorage;
         private string zipFileName = "result.zip";
 
@@ -145,20 +146,20 @@ namespace HelloXamarinFormsWorld
                 Text = "Get Path",
 
             };
-            btnGetPath.Clicked += BtnGetPath_ClickedAsync;
+            btnGetPath.Clicked += BtnGetPath_Clicked;
 
             Button btnUpload = new Button
             {
                 Text = "Upload",
 
             };
-            btnUpload.Clicked += BtnUpload_ClickedAsync;
+            btnUpload.Clicked += BtnUpload_Clicked;
 
             Button btnChangePermission = new Button
             {
                 Text = "Change Permission"
             };
-            btnChangePermission.Clicked += BtnChangePermission_ClickedAsync;
+            btnChangePermission.Clicked += BtnChangePermission_Clicked;
 
             Button btnZipFiles = new Button
             {
@@ -176,7 +177,7 @@ namespace HelloXamarinFormsWorld
         }
 
 #region "Button Events"
-        private void BtnGetPath_ClickedAsync(object sender, EventArgs e)
+        private void BtnGetPath_Clicked(object sender, EventArgs e)
         {
             Debug.WriteLine("Please paste your test files here: " + folder.Path);
             Debug.WriteLine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.Personal));
@@ -186,44 +187,19 @@ namespace HelloXamarinFormsWorld
         {
             try
             {
-                string startPath = folder.Path + @"\start";
                 string zipPath = folder.Path + @"\" + zipFileName;
 
                 // LocalStorage Path
                 // Win - C:\Users\GIGABYTE\AppData\Local\Packages\a6e37ba2-4e37-4bd6-b5b6-16ae0b1e4f54_tbz3402trp7yy\LocalState
                 // Android - /data/user/0/HelloXamarinFormsWorld.Android/files
-                Debug.WriteLine("Start Zip files in: " + startPath);
-
+                
                 // zip directory
                 //ZipFile.CreateFromDirectory(startPath, zipPath);
 
-                string filepath = folder.Path + @"\" + Global.JSON_FILE_NAME;
-                List<string> filenames = new List<string>();
+                string jsonpath = folder.Path + @"\" + Global.JSON_FILE_NAME;
 
-                using (StreamReader r = new StreamReader(filepath))
-                {
-                    var json = r.ReadToEnd();
-                    var jobj = JObject.Parse(json);
-                    
-                    Debug.WriteLine(jobj.ToString());
+                ManageFile.AddFilesToZip(zipPath, ManageFile.ReadJSONAndCreateFileList(jsonpath, folder.Path + @"\start"));
 
-                    foreach (var item in jobj.Properties())
-                    {
-                        filenames.Add(startPath + @"\" + item.Value);
-                    }
-
-                    // zip files in json
-                    //using (ZipArchive zipArchive = ZipFile.Open(zipPath, ZipArchiveMode.Create))
-                    //{
-                    //    foreach (var file in filenames)
-                    //    {
-                    //        var fileInfo = new FileInfo(file);
-                    //        zipArchive.CreateEntryFromFile(fileInfo.FullName, fileInfo.Name);
-                    //    }
-                    //}
-                    AddFilesToZip(zipPath, filenames.ToArray());
-                }
-                
                 Debug.WriteLine("Zip files complete!");
             }
             catch (Exception ex)
@@ -232,89 +208,16 @@ namespace HelloXamarinFormsWorld
             }
         }
 
-        private async void BtnUpload_ClickedAsync(object sender, System.EventArgs e)
+        private void BtnUpload_Clicked(object sender, System.EventArgs e)
         {
-            try
-            {
-                bool isFileExist = await PCLHelper.IsFileExistAsync(zipFileName, folder);
-                Debug.WriteLine("File Exist: " + isFileExist);
-
-                s3Client = new AmazonS3Client("AKIAJCWY6VJ2VFOZ6JFQ", "Y7kBzSAGTY1mQB+9XthKg3t1mRgwoh3rzDJLG6yv", bucketRegion);
-
-                TransferUtility fileTransferUtility = new TransferUtility(s3Client);
-                uploadFilePath = folder.Path + @"\" + zipFileName;
-                Debug.WriteLine("upload file: " + uploadFilePath);
-
-                var fileToUpload =
-                    new System.IO.FileStream(uploadFilePath, System.IO.FileMode.Open, System.IO.FileAccess.Read);
-
-                await fileTransferUtility.UploadAsync(fileToUpload, bucketName, keyName);
-
-                #region "other upload method" // work in .net but not work in xamarin
-                //using (var fileToUpload =
-                //    new System.IO.FileStream(folder.Path + "\\" + "test_upload3.txt", System.IO.FileMode.Open, System.IO.FileAccess.Read))
-                //{
-                //    await fileTransferUtility.UploadAsync(fileToUpload,
-                //                               bucketName, keyName);
-                //}
-
-                //await s3Client.PutObjectAsync(new Amazon.S3.Model.PutObjectRequest()
-                //{
-                //    BucketName = bucketName,
-                //    FilePath = folder.Path + "\\" + "test_upload3.txt",
-                //    Key = keyName
-                //});
-                #endregion
-
-                // await fileTransferUtility.UploadAsync(folder.Path + "\\" + "test_upload4.txt", "sradar.test1");
-                Debug.WriteLine("Upload file complete");
-            }
-            catch (AmazonS3Exception s3Exception)
-            {
-                Debug.WriteLine(s3Exception.StackTrace);
-            }
-
+            uploadFilePath = folder.Path + @"\" + zipFileName;
+            ManageAWS.UploadFileToAWS("AKIAJCWY6VJ2VFOZ6JFQ", "Y7kBzSAGTY1mQB+9XthKg3t1mRgwoh3rzDJLG6yv", bucketRegion, bucketName, uploadFilePath, keyName);
         }
 
-        private async void BtnChangePermission_ClickedAsync(object sender, System.EventArgs e)
+        private void BtnChangePermission_Clicked(object sender, System.EventArgs e)
         {
-            try
-            {
-                s3Client = new AmazonS3Client("AKIAJCWY6VJ2VFOZ6JFQ", "Y7kBzSAGTY1mQB+9XthKg3t1mRgwoh3rzDJLG6yv", bucketRegion);
-                PutACLRequest request = new PutACLRequest()
-                {
-                    CannedACL = S3CannedACL.PublicReadWrite,
-                    BucketName = bucketName,
-                    Key = keyName
-                };
-                PutACLResponse response1 = await s3Client.PutACLAsync(request);
-
-                Debug.WriteLine("Change Permission Complete");
-            }
-            catch (AmazonS3Exception ex)
-            {
-                Debug.WriteLine("Exception occur when Change Permission: '{0}'", ex.Message);
-            }
+            ManageAWS.ChangeFilePermission("AKIAJCWY6VJ2VFOZ6JFQ", "Y7kBzSAGTY1mQB+9XthKg3t1mRgwoh3rzDJLG6yv", bucketRegion, bucketName, keyName, S3CannedACL.PublicReadWrite);
         }
 #endregion
-
-        public static void AddFilesToZip(string zipPath, string[] files)
-        {
-            if (files == null || files.Length == 0)
-            {
-                return;
-            }
-
-            using (var zipArchive = ZipFile.Open(zipPath, ZipArchiveMode.Update))
-            {
-                foreach (var file in files)
-                {
-                    var fileInfo = new FileInfo(file);
-                    zipArchive.CreateEntryFromFile(fileInfo.FullName, fileInfo.Name);
-                }
-            }
-        }
-
-        
     }
 }
