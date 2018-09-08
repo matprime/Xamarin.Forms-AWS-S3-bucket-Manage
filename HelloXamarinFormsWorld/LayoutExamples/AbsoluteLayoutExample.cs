@@ -10,6 +10,9 @@ using System.Threading.Tasks;
 using Amazon.S3.Model;
 using System.Diagnostics;
 using System.IO.Compression;
+using System.IO;
+using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
 
 namespace HelloXamarinFormsWorld
 {
@@ -98,7 +101,7 @@ namespace HelloXamarinFormsWorld
             IFile file = await folder.CreateFileAsync(fileName, CreationCollisionOption.ReplaceExisting);
 
             // populate the file with image data  
-            using (System.IO.Stream stream = await file.OpenAsync(FileAccess.ReadAndWrite))
+            using (System.IO.Stream stream = await file.OpenAsync(PCLStorage.FileAccess.ReadAndWrite))
             {
                 stream.Write(image, 0, image.Length);
             }
@@ -112,7 +115,7 @@ namespace HelloXamarinFormsWorld
             //open file if exists  
             IFile file = await folder.GetFileAsync(fileName);
             //load stream to buffer  
-            using (System.IO.Stream stream = await file.OpenAsync(FileAccess.ReadAndWrite))
+            using (System.IO.Stream stream = await file.OpenAsync(PCLStorage.FileAccess.ReadAndWrite))
             {
                 long length = stream.Length;
                 byte[] streamBuffer = new byte[length];
@@ -127,22 +130,24 @@ namespace HelloXamarinFormsWorld
     public class AbsoluteLayoutExample : ContentPage
     {
         private const string bucketName = "sradar.test1";
-        private const string keyName = "test_upload4";
-        private const string filePath = "I:\\Work\\32_xamarin_upload_aws s3\\Tutorial\\test_upload3.txt";
+        private string keyName = "result.zip";
+        private string uploadFilePath = "";
         // Specify your bucket region (an example region is shown).
         private static readonly RegionEndpoint bucketRegion = RegionEndpoint.USEast1;
         private static IAmazonS3 s3Client;
 
+        private static IFolder folder = FileSystem.Current.LocalStorage;
+        private string zipFileName = "result.zip";
+
         public AbsoluteLayoutExample()
         {
-            //Label red = new Label
-            //            {
-            //                Text = "Stop",
-            //                BackgroundColor = Color.Red,
-            //                FontSize = 20,
-            //                WidthRequest = 200,
-            //                HeightRequest = 30
-            //            };
+            Button btnGetPath = new Button
+            {
+                Text = "Get Path",
+
+            };
+            btnGetPath.Clicked += BtnGetPath_ClickedAsync;
+
             Button btnUpload = new Button
             {
                 Text = "Upload",
@@ -163,28 +168,59 @@ namespace HelloXamarinFormsWorld
             btnZipFiles.Clicked += BtnZipFiles_Clicked;
 
             AbsoluteLayout absLayout = new AbsoluteLayout();
-            //absLayout.Children.Add(red, new Point(20, 20));
-            absLayout.Children.Add(btnUpload, new Point(20, 20));
-            absLayout.Children.Add(btnChangePermission, new Point(120, 20));
-            absLayout.Children.Add(btnZipFiles, new Point(280, 20));
+            absLayout.Children.Add(btnGetPath, new Point(20, 20));
+            absLayout.Children.Add(btnZipFiles, new Point(120, 20));
+            absLayout.Children.Add(btnUpload, new Point(220, 20));
+            absLayout.Children.Add(btnChangePermission, new Point(320, 20));
 
             Content = absLayout;
+        }
+
+        private void BtnGetPath_ClickedAsync(object sender, EventArgs e)
+        {
+            Debug.WriteLine("Please paste your test files here: " + folder.Path);
         }
 
         private void BtnZipFiles_Clicked(object sender, EventArgs e)
         {
             try
             {
-                IFolder folder = FileSystem.Current.LocalStorage;
-
                 string startPath = folder.Path + @"\start";
-                string zipPath = folder.Path + @"\result.zip";
+                string zipPath = folder.Path + @"\" + zipFileName;
 
                 // LocalStorage Path - C:\Users\GIGABYTE\AppData\Local\Packages\a6e37ba2-4e37-4bd6-b5b6-16ae0b1e4f54_tbz3402trp7yy\LocalState
                 Debug.WriteLine("Start Zip files in: " + startPath);
 
-                ZipFile.CreateFromDirectory(startPath, zipPath);
+                // zip directory
+                //ZipFile.CreateFromDirectory(startPath, zipPath);
 
+                string filepath = folder.Path + @"\uploadFileList.json";
+                List<string> filenames = new List<string>();
+
+                using (StreamReader r = new StreamReader(filepath))
+                {
+                    var json = r.ReadToEnd();
+                    var jobj = JObject.Parse(json);
+                    
+                    Debug.WriteLine(jobj.ToString());
+
+                    foreach (var item in jobj.Properties())
+                    {
+                        filenames.Add(startPath + @"\" + item.Value);
+                    }
+
+                    // zip files in json
+                    //using (ZipArchive zipArchive = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+                    //{
+                    //    foreach (var file in filenames)
+                    //    {
+                    //        var fileInfo = new FileInfo(file);
+                    //        zipArchive.CreateEntryFromFile(fileInfo.FullName, fileInfo.Name);
+                    //    }
+                    //}
+                    AddFilesToZip(zipPath, filenames.ToArray());
+                }
+                
                 Debug.WriteLine("Zip files complete!");
             }
             catch (Exception ex)
@@ -193,22 +229,48 @@ namespace HelloXamarinFormsWorld
             }
         }
 
+        public static void AddFilesToZip(string zipPath, string[] files)
+        {
+            if (files == null || files.Length == 0)
+            {
+                return;
+            }
+
+            using (var zipArchive = ZipFile.Open(zipPath, ZipArchiveMode.Update))
+            {
+                foreach (var file in files)
+                {
+                    var fileInfo = new FileInfo(file);
+                    zipArchive.CreateEntryFromFile(fileInfo.FullName, fileInfo.Name);
+                }
+            }
+        }
+
         private async void BtnUpload_ClickedAsync(object sender, System.EventArgs e)
         {
             try
             {
-                IFolder folder = FileSystem.Current.LocalStorage;
-                Debug.WriteLine(folder.Path);
-                
-                bool isFileExist = await PCLHelper.IsFileExistAsync("test_upload3.txt", folder);
+                bool isFileExist = await PCLHelper.IsFileExistAsync(zipFileName, folder);
                 Debug.WriteLine("File Exist: " + isFileExist);
 
                 s3Client = new AmazonS3Client("AKIAJCWY6VJ2VFOZ6JFQ", "Y7kBzSAGTY1mQB+9XthKg3t1mRgwoh3rzDJLG6yv", bucketRegion);
 
                 TransferUtility fileTransferUtility = new TransferUtility(s3Client);
+                uploadFilePath = folder.Path + @"\" + zipFileName;
+                Debug.WriteLine("upload file: " + uploadFilePath);
 
-                //// Option 1. Upload a file. The file name is used as the object key name.
-                Debug.WriteLine("upload file path: " + folder.Path + "\\" + "test_upload3.txt");
+                var fileToUpload =
+                    new System.IO.FileStream(uploadFilePath, System.IO.FileMode.Open, System.IO.FileAccess.Read);
+
+                await fileTransferUtility.UploadAsync(fileToUpload, bucketName, keyName);
+
+                #region "other upload method" // work in .net but not work in xamarin
+                //using (var fileToUpload =
+                //    new System.IO.FileStream(folder.Path + "\\" + "test_upload3.txt", System.IO.FileMode.Open, System.IO.FileAccess.Read))
+                //{
+                //    await fileTransferUtility.UploadAsync(fileToUpload,
+                //                               bucketName, keyName);
+                //}
 
                 //await s3Client.PutObjectAsync(new Amazon.S3.Model.PutObjectRequest()
                 //{
@@ -216,22 +278,9 @@ namespace HelloXamarinFormsWorld
                 //    FilePath = folder.Path + "\\" + "test_upload3.txt",
                 //    Key = keyName
                 //});
+                #endregion
 
                 // await fileTransferUtility.UploadAsync(folder.Path + "\\" + "test_upload4.txt", "sradar.test1");
-
-                // << Tested Part
-                var fileToUpload =
-                    new System.IO.FileStream(folder.Path + "\\" + "test_upload4.txt", System.IO.FileMode.Open, System.IO.FileAccess.Read);
-
-                await fileTransferUtility.UploadAsync(fileToUpload, bucketName, keyName);
-                // >>
-
-                //using (var fileToUpload =
-                //    new System.IO.FileStream(folder.Path + "\\" + "test_upload3.txt", System.IO.FileMode.Open, System.IO.FileAccess.Read))
-                //{
-                //    await fileTransferUtility.UploadAsync(fileToUpload,
-                //                               bucketName, keyName);
-                //}
                 Debug.WriteLine("Upload file complete");
             }
             catch (AmazonS3Exception s3Exception)
