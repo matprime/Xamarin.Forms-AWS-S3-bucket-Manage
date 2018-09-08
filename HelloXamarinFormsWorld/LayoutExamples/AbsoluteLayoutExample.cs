@@ -126,7 +126,6 @@ namespace HelloXamarinFormsWorld
         }
     }
 #endregion
-
     public class AbsoluteLayoutExample : ContentPage
     {
         private const string bucketName = "sradar.test1";
@@ -169,16 +168,18 @@ namespace HelloXamarinFormsWorld
 
             AbsoluteLayout absLayout = new AbsoluteLayout();
             absLayout.Children.Add(btnGetPath, new Point(20, 20));
-            absLayout.Children.Add(btnZipFiles, new Point(120, 20));
-            absLayout.Children.Add(btnUpload, new Point(220, 20));
-            absLayout.Children.Add(btnChangePermission, new Point(320, 20));
+            absLayout.Children.Add(btnZipFiles, new Point(20, 80));
+            absLayout.Children.Add(btnUpload, new Point(20, 140));
+            absLayout.Children.Add(btnChangePermission, new Point(20, 200));
 
             Content = absLayout;
         }
 
+#region "Button Events"
         private void BtnGetPath_ClickedAsync(object sender, EventArgs e)
         {
             Debug.WriteLine("Please paste your test files here: " + folder.Path);
+            Debug.WriteLine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.Personal));
         }
 
         private void BtnZipFiles_Clicked(object sender, EventArgs e)
@@ -188,13 +189,15 @@ namespace HelloXamarinFormsWorld
                 string startPath = folder.Path + @"\start";
                 string zipPath = folder.Path + @"\" + zipFileName;
 
-                // LocalStorage Path - C:\Users\GIGABYTE\AppData\Local\Packages\a6e37ba2-4e37-4bd6-b5b6-16ae0b1e4f54_tbz3402trp7yy\LocalState
+                // LocalStorage Path
+                // Win - C:\Users\GIGABYTE\AppData\Local\Packages\a6e37ba2-4e37-4bd6-b5b6-16ae0b1e4f54_tbz3402trp7yy\LocalState
+                // Android - /data/user/0/HelloXamarinFormsWorld.Android/files
                 Debug.WriteLine("Start Zip files in: " + startPath);
 
                 // zip directory
                 //ZipFile.CreateFromDirectory(startPath, zipPath);
 
-                string filepath = folder.Path + @"\uploadFileList.json";
+                string filepath = folder.Path + @"\" + Global.JSON_FILE_NAME;
                 List<string> filenames = new List<string>();
 
                 using (StreamReader r = new StreamReader(filepath))
@@ -226,23 +229,6 @@ namespace HelloXamarinFormsWorld
             catch (Exception ex)
             {
                 Debug.WriteLine("Exception occur when zip files: '{0}'", ex.Message);
-            }
-        }
-
-        public static void AddFilesToZip(string zipPath, string[] files)
-        {
-            if (files == null || files.Length == 0)
-            {
-                return;
-            }
-
-            using (var zipArchive = ZipFile.Open(zipPath, ZipArchiveMode.Update))
-            {
-                foreach (var file in files)
-                {
-                    var fileInfo = new FileInfo(file);
-                    zipArchive.CreateEntryFromFile(fileInfo.FullName, fileInfo.Name);
-                }
             }
         }
 
@@ -310,5 +296,25 @@ namespace HelloXamarinFormsWorld
                 Debug.WriteLine("Exception occur when Change Permission: '{0}'", ex.Message);
             }
         }
+#endregion
+
+        public static void AddFilesToZip(string zipPath, string[] files)
+        {
+            if (files == null || files.Length == 0)
+            {
+                return;
+            }
+
+            using (var zipArchive = ZipFile.Open(zipPath, ZipArchiveMode.Update))
+            {
+                foreach (var file in files)
+                {
+                    var fileInfo = new FileInfo(file);
+                    zipArchive.CreateEntryFromFile(fileInfo.FullName, fileInfo.Name);
+                }
+            }
+        }
+
+        
     }
 }
